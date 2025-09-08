@@ -4,40 +4,27 @@
   <meta charset="utf-8"/>
   <title>VM Packing — CP-SAT</title>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<style>
-  :root { --page-max: 1400px; }
-  html,body { margin:0; background:#0b1020; color:#e5e7eb; font-family: ui-sans-serif,system-ui,Segoe UI,Roboto,Arial; }
-  .wrap { max-width: var(--page-max); margin: 0 auto; padding: 22px 16px; }
-
-  .card { background:#0f172a; border:1px solid #1f2937; border-radius:14px; padding:18px; margin-bottom:18px; }
-  .section-title { color:#9ca3af; text-transform:uppercase; font-size:12px; letter-spacing:.08em; margin-bottom:14px; }
-
-  .grid { display:grid; grid-template-columns: repeat(4,minmax(200px,1fr)); gap:14px; }
-  label { font-size:12px; color:#cbd5e1; display:block; margin-bottom:6px; }
-  input[type="file"], select, input[type="number"] { width:100%; background:#111827; color:#e5e7eb; border:1px solid #374151; padding:10px; border-radius:10px; }
-  .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .btn { background:#2563eb; color:white; padding:11px 16px; border:none; border-radius:12px; cursor:pointer; font-weight:700; }
-  .btn:disabled { opacity:.6; cursor:not-allowed; }
-
-  .stats { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; }
-  .stat { background:#0b1329; border:1px solid #1f2937; padding:12px 14px; border-radius:12px; min-width:170px; }
-  .layout { overflow:auto; border:1px dashed #1f2937; border-radius:12px; padding:10px; background:#0c1226; }
-  .layout img { display:block; max-width:100%; height:auto; image-rendering: crisp-edges; }
-  .legend { font-size:12px; color:#9ca3af; margin-top:6px; }
-  .error { background:#4c1d1d; color:#fecaca; border:1px solid #7f1d1d; padding:10px 12px; border-radius:10px; margin-bottom:10px; }
-</style>
+  <!-- estilos -->
+  <link rel="stylesheet" href="/static/style.css"/>
 </head>
 <body>
+
+  <header class="page-header">
+  <h1>Telcel Capacity Planning</h1>
+  <p class="subtitle">Optimización de VMs</p>
+</header>
+
   <div class="wrap">
-    <!-- ENTRADA (arriba, full width) -->
+    <!-- ENTRADA (full width) -->
     <div class="card">
       <div class="section-title">Entrada</div>
       <div class="grid">
-        <div>
+        <div class="grid-item">
           <label>CSV del catálogo</label>
           <input type="file" id="csvFile" accept=".csv"/>
         </div>
-        <div>
+
+        <div class="grid-item">
           <label>Separador (CSV)</label>
           <select id="delimiter">
             <option value="">Auto</option>
@@ -47,79 +34,38 @@
             <option value="|">Barra (|)</option>
           </select>
         </div>
-        <div class="row" style="align-items:end;">
-          <input type="checkbox" id="enforceAZ" checked/>
-          <label for="enforceAZ">Enforce AZ por host</label>
+
+        <div class="grid-item">
+          <label>Algoritmo</label>
+          <select id="algo">
+            <option value="cpsat2">CP-SAT (2 fases)</option>
+            <option value="cpsat">CP-SAT (1 fase)</option>
+          </select>
         </div>
-        <div>
-          <label>Time limit (s)</label>
-          <input type="number" id="timeLimit" value="15" min="1" max="300"/>
+
+        <div class="grid-item">
+          <label>Acciones</label>
+          <div class="row">
+            <button id="btnRun" class="btn primary">Ejecutar</button>
+            <!-- STOP cancela la petición actual (AbortController) -->
+            <button id="btnStop" class="btn danger" disabled>STOP</button>
+            <!-- Descargar PNG generado -->
+            <a id="btnDownload" class="btn success" style="display:none;" download="acomodo.png">Descargar PNG</a>
+          </div>
         </div>
       </div>
-      <div class="row" style="margin-top:12px;">
-        <button id="btnRun" class="btn">Ejecutar CP-SAT</button>
-        <div class="legend">Columnas: Inst, VNF, VNFC, Color, Longitud, AZ, Anti-afinidad, Requerimiento</div>
-      </div>
+      <div class="legend">Columnas: Inst, VNF, VNFC, Color, Longitud, AZ, Anti-afinidad, Requerimiento</div>
     </div>
 
-    <!-- RESULTADOS (abajo, full width) -->
+    <!-- RESULTADOS (full width) -->
     <div class="card">
       <div class="section-title">Resultados</div>
       <div id="stats" class="stats"></div>
-      <div id="layout" class="layout"><i style="color:#94a3b8;">Sube un CSV y ejecuta para ver el layout…</i></div>
+      <div id="layout" class="layout"><i class="hint">Sube un CSV y ejecuta para ver el layout…</i></div>
     </div>
   </div>
 
-<script>
-  const $ = (s)=>document.querySelector(s);
-  const btn = $('#btnRun'), statsEl = $('#stats'), layoutEl = $('#layout');
-  const fmtPct = (x)=> (isFinite(x) ? (x*100).toFixed(1)+'%' : '—');
-  const safe = (v)=> (v===0 || v ? v : '—');
-
-  btn.onclick = async ()=>{
-    const file = $('#csvFile').files[0];
-    if(!file){ alert('Sube un CSV.'); return; }
-    btn.disabled = true;
-    layoutEl.innerHTML = '';
-    statsEl.innerHTML = '';
-    try{
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('enforceAZ', $('#enforceAZ').checked ? 'true' : 'false');
-      fd.append('timeLimit', $('#timeLimit').value || '20');
-      fd.append('delimiter', $('#delimiter').value);
-
-      const res = await fetch('/api/run-cpsat', { method:'POST', body: fd });
-      const data = await res.json();
-      if(!res.ok){
-        layoutEl.innerHTML = `<div class="error">${data.error || 'Error en /api/run-cpsat'}</div>`;
-        if(data.stats) renderStats(data.stats);
-        return;
-      }
-      layoutEl.innerHTML = `<img alt="Acomodo" src="${data.image}"/>`;
-      renderStats(data.stats || {});
-    }catch(err){
-      layoutEl.innerHTML = `<div class="error">${err.message}</div>`;
-    }finally{
-      btn.disabled = false;
-    }
-  };
-
-  function renderStats(s){
-    statsEl.innerHTML = `
-      <div class="stat"><b>Estado</b><div>${safe(s.status)}</div></div>
-      <div class="stat"><b>VMs</b><div>${safe(s.n_vms)}</div></div>
-      <div class="stat"><b>Hosts</b><div>${safe(s.hosts)}</div></div>
-      <div class="stat"><b>Capacidad</b><div>${safe(s.total_capacity)}</div></div>
-      <div class="stat"><b>Usado</b><div>${safe(s.total_used)}</div></div>
-      <div class="stat"><b>Utilización</b><div>${fmtPct(s.utilization)}</div></div>
-      <div class="stat"><b>Vacío</b><div>${fmtPct(s.empty_pct)}</div></div>
-    ` + (Array.isArray(s.az_values) ? `<div class="stat"><b>AZ detectadas</b><div>${s.az_values.join(', ')}</div></div>` : '');
-    const perAZ = s.per_az || {};
-    for(const [az,v] of Object.entries(perAZ)){
-      statsEl.innerHTML += `<div class="stat"><b>${az}</b><div>hosts: ${safe(v.hosts)}<br>util: ${fmtPct(v.utilization)}</div></div>`;
-    }
-  }
-</script>
+  <!-- lógica JS -->
+  <script src="/static/app.js"></script>
 </body>
 </html>

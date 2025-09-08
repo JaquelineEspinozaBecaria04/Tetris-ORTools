@@ -1,0 +1,62 @@
+:root { --page-max: 1400px; }
+
+html,body { margin:0; background:#0b1020; color:#e5e7eb;
+  font-family: ui-sans-serif,system-ui,Segoe UI,Roboto,Arial; }
+
+.wrap { max-width: var(--page-max); margin: 0 auto; padding: 22px 16px; }
+
+.card { background:#0f172a; border:1px solid #1f2937; border-radius:14px; padding:18px; margin-bottom:18px; }
+.section-title { color:#9ca3af; text-transform:uppercase; font-size:12px; letter-spacing:.08em; margin-bottom:14px; }
+
+.grid { display:grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap:44px; }
+.grid-item { min-width: 0; } /* evita desborde */
+label { font-size:12px; color:#cbd5e1; display:block; margin-bottom:6px; }
+input[type="file"], select { width:100%; background:#111827; color:#e5e7eb; border:1px solid #374151; padding:10px; border-radius:10px; }
+.row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.btn { padding:10px 14px; border:none; border-radius:10px; cursor:pointer; font-weight:700; }
+.btn.primary { background:#2563eb; color:white; }
+.btn.success { background:#059669; color:white; }
+.btn.danger  { background:#b91c1c; color:white; }
+.btn:disabled { opacity:.6; cursor:not-allowed; }
+
+.stats { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; }
+.stat { background:#0b1329; border:1px solid #1f2937; padding:12px 14px; border-radius:12px; min-width:170px; }
+.layout { overflow:auto; border:1px dashed #1f2937; border-radius:12px; padding:10px; background:#0c1226; }
+.layout img { display:block; max-width:100%; height:auto; image-rendering: crisp-edges; }
+.legend { font-size:12px; color:#9ca3af; margin-top:6px; }
+.hint { color:#94a3b8; }
+.error { background:#4c1d1d; color:#fecaca; border:1px solid #7f1d1d; padding:10px 12px; border-radius:10px; margin-bottom:10px; }
+
+/* Responsive: si hay poco ancho, la grid se apila en 2 columnas */
+@media (max-width: 1024px) {
+  .grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* Encabezado */
+.page-header {
+  text-align: center;
+  padding: 60px 20px 40px;
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  border-bottom: 1px solid #1e293b;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+}
+
+/* Título */
+.page-header h1 {
+  font-size: 2.8rem;
+  font-weight: 800;
+  margin: 0;
+  color: #38bdf8; /* celeste moderno */
+  letter-spacing: -1px;
+}
+
+/* Subtítulo */
+.page-header .subtitle {
+  margin-top: 12px;
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: #94a3b8; /* gris azulado */
+}
