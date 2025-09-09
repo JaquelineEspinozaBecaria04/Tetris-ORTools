@@ -1,11 +1,26 @@
-:root { --page-max: 1400px; }
+/* Tipografías modernas */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@600;800&display=swap');
 
-html,body { margin:0; background:#0b1020; color:#e5e7eb;
-  font-family: ui-sans-serif,system-ui,Segoe UI,Roboto,Arial; }
+:root { 
+  --page-max: 1400px;
+  --header-pad: 20px;   /* controla espacio arriba/abajo del encabezado y arriba del contenido */
+}
 
-.wrap { max-width: var(--page-max); margin: 0 auto; padding: 22px 16px; }
+html,body {
+  margin:0; 
+  background:#0b1020; 
+  color:#e5e7eb;
+  font-family: Inter, ui-sans-serif, system-ui, Segoe UI, Roboto, Arial;
+}
 
-.card { background:#0f172a; border:1px solid #1f2937; border-radius:14px; padding:18px; margin-bottom:18px; }
+.wrap { 
+  max-width: var(--page-max); 
+  margin: 0 auto; 
+  /* top igual a --header-pad para que el gap con 'Entrada' sea el mismo que arriba del título */
+  padding: var(--header-pad) 16px 22px; 
+}
+
+.card { background:#0f172a; border:1px solid #1F2937; border-radius:14px; padding:18px; margin-bottom:18px; }
 .section-title { color:#9ca3af; text-transform:uppercase; font-size:12px; letter-spacing:.08em; margin-bottom:14px; }
 
 .grid { display:grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap:44px; }
@@ -20,12 +35,12 @@ input[type="file"], select { width:100%; background:#111827; color:#e5e7eb; bord
 .btn:disabled { opacity:.6; cursor:not-allowed; }
 
 .stats { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; }
-.stat { background:#0b1329; border:1px solid #1f2937; padding:12px 14px; border-radius:12px; min-width:170px; }
-.layout { overflow:auto; border:1px dashed #1f2937; border-radius:12px; padding:10px; background:#0c1226; }
+.stat { background:#0b1329; border:1px solid #1F2937; padding:12px 14px; border-radius:12px; min-width:170px; }
+.layout { overflow:auto; border:1px dashed #1F2937; border-radius:12px; padding:10px; background:#0c1226; }
 .layout img { display:block; max-width:100%; height:auto; image-rendering: crisp-edges; }
-.legend { font-size:12px; color:#9ca3af; margin-top:6px; }
+.legend { font-size:12px; color:#9ca3af; }
 .hint { color:#94a3b8; }
-.error { background:#4c1d1d; color:#fecaca; border:1px solid #7f1d1d; padding:10px 12px; border-radius:10px; margin-bottom:10px; }
+.error { background:#4c1d1d; color:#fecaca; border:1px solid #7F1D1D; padding:10px 12px; border-radius:10px; margin-bottom:10px; }
 
 /* Responsive: si hay poco ancho, la grid se apila en 2 columnas */
 @media (max-width: 1024px) {
@@ -35,28 +50,59 @@ input[type="file"], select { width:100%; background:#111827; color:#e5e7eb; bord
   .grid { grid-template-columns: 1fr; }
 }
 
-/* Encabezado */
-.page-header {
+/* ===== Encabezado refinado (elegante + minimal) ===== */
+.page-header{
+  background: transparent;             /* sin división, se funde con la página */
+  padding: var(--header-pad) 12px;     /* altura contenida */
+}
+
+/* Grid 3 columnas: logo izq | títulos | logo der */
+.page-header .brand{
+  max-width: var(--page-max);
+  margin: 0 auto;
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(120px,1fr) auto minmax(120px,1fr);
+  column-gap: 24px;                    /* aire horizontal */
+}
+
+.page-header .logo{
+  height: 50px;                        /* ajusta a gusto */
+  width: auto;
+  opacity: .95;
+  filter: grayscale(12%) contrast(105%); /* look sobrio */
+}
+.page-header .logo-left{ justify-self: start; }
+.page-header .logo-right{ justify-self: end; }
+
+.page-header .titles{
   text-align: center;
-  padding: 60px 20px 40px;
-  background: linear-gradient(135deg, #1e293b, #0f172a);
-  border-bottom: 1px solid #1e293b;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+  min-width: 280px;
 }
 
-/* Título */
-.page-header h1 {
-  font-size: 2.8rem;
-  font-weight: 800;
+/* Título con tipografía distinta (Outfit) y degradado sutil */
+.page-header h1{
   margin: 0;
-  color: #38bdf8; /* celeste moderno */
-  letter-spacing: -1px;
+  font-family: Outfit, Inter, system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  font-size: clamp(24px, 2.1vw + 12px, 42px);
+  background: linear-gradient(180deg, #F1F5F9 0%, #DBE2EA 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;                  /* usa el degradado */
 }
 
-/* Subtítulo */
-.page-header .subtitle {
-  margin-top: 12px;
-  font-size: 1.1rem;
-  font-weight: 400;
-  color: #94a3b8; /* gris azulado */
+/* Subtítulo sobrio (Inter, como body) */
+.page-header .subtitle{
+  margin: 4px 0 0;
+  font-size: clamp(12px, 0.9vw + 8px, 16px);
+  color: #94A3B8;
+}
+
+/* Responsivo header */
+@media (max-width: 640px){
+  .page-header .logo{ height: 36px; }
+  .page-header .brand{ column-gap: 16px; }
 }

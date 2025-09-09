@@ -28,7 +28,7 @@ async def run_cpsat(
     # Enforce AZ está fijo a True en el solver; mantenemos compatibilidad de parámetro por si en un futuro se expone.
     delimiter: str | None = Form(None),
     algo: str = Form("cpsat2"),     # "cpsat" (1 fase) o "cpsat2" (dos fases, recomendado)
-    timeLimit: float = Form(60.0)   # mantenido interno; en la UI no se expone (se usa STOP para cancelar la petición)
+    timeLimit: float = Form(120.0)   # mantenido interno; en la UI no se expone (se usa STOP para cancelar la petición)
 ):
     """Lee CSV, ejecuta solver y devuelve imagen y estadísticas."""
     # 1) Cargar CSV
@@ -72,6 +72,7 @@ async def run_cpsat(
 
 # Estático (frontend)
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
+app.mount("/media", StaticFiles(directory="frontend/Media"), name="media")  # << aquí
 
 @app.get("/")
 def root():

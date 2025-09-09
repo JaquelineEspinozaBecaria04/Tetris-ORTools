@@ -8,12 +8,16 @@
   <link rel="stylesheet" href="/static/style.css"/>
 </head>
 <body>
-
-  <header class="page-header">
-  <h1>Telcel Capacity Planning</h1>
-  <p class="subtitle">Optimización de VMs</p>
+<header class="page-header">
+  <div class="brand">
+    <img src="/media/Telcel_logo.png" alt="Logo izquierdo" class="logo">
+    <div class="titles">
+      <h1>Telcel Capacity Planning</h1>
+      <p class="subtitle">Optimización de VMs</p>
+    </div>
+    <img src="/media/LogoCID.png" alt="Logo derecho" class="logo">
+  </div>
 </header>
-
   <div class="wrap">
     <!-- ENTRADA (full width) -->
     <div class="card">
@@ -23,7 +27,6 @@
           <label>CSV del catálogo</label>
           <input type="file" id="csvFile" accept=".csv"/>
         </div>
-
         <div class="grid-item">
           <label>Separador (CSV)</label>
           <select id="delimiter">
@@ -34,7 +37,6 @@
             <option value="|">Barra (|)</option>
           </select>
         </div>
-
         <div class="grid-item">
           <label>Algoritmo</label>
           <select id="algo">
@@ -42,7 +44,6 @@
             <option value="cpsat">CP-SAT (1 fase)</option>
           </select>
         </div>
-
         <div class="grid-item">
           <label>Acciones</label>
           <div class="row">
@@ -56,7 +57,6 @@
       </div>
       <div class="legend">Columnas: Inst, VNF, VNFC, Color, Longitud, AZ, Anti-afinidad, Requerimiento</div>
     </div>
-
     <!-- RESULTADOS (full width) -->
     <div class="card">
       <div class="section-title">Resultados</div>
@@ -64,7 +64,6 @@
       <div id="layout" class="layout"><i class="hint">Sube un CSV y ejecuta para ver el layout…</i></div>
     </div>
   </div>
-
   <!-- lógica JS -->
   <script src="/static/app.js"></script>
 </body>
