@@ -106,3 +106,10 @@ input[type="file"], select { width:100%; background:#111827; color:#e5e7eb; bord
   .page-header .logo{ height: 36px; }
   .page-header .brand{ column-gap: 16px; }
 }
+
+/* Asegurar la misma fuente en formularios */
+input, select, button, label, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
