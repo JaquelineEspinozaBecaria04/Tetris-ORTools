@@ -38,26 +38,42 @@ btnRun.onclick = async () => {
   currentAbort = new AbortController();
 
   try {
-    const res = await fetch('/api/run-cpsat', {
-      method: 'POST',
-      body: fd,
-      signal: currentAbort.signal
-    });
-    const data = await res.json();
+  const res = await fetch('/api/run-cpsat', {
+    method: 'POST',
+    body: fd,
+    signal: currentAbort.signal
+  });
 
-    if (!res.ok) {
-      layoutEl.innerHTML = `<div class="error">${data.error || 'Error en /api/run-cpsat'}</div>`;
-      if (data.stats) renderStats(data.stats);
+  const contentType = res.headers.get('content-type') || '';
+  const text = await res.text();
+
+  let data;
+  if (contentType.includes('application/json')) {
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      layoutEl.innerHTML = `<div class="error">Respuesta JSON inválida: ${text.slice(0,200)}</div>`;
       return;
     }
+  } else {
+    // Muestra qué devolvió realmente (HTML de error, redirect, etc.)
+    layoutEl.innerHTML = `<div class="error">Respuesta no-JSON (${res.status} ${res.statusText}): ${text.slice(0,200)}</div>`;
+    return;
+  }
 
-    // Mostrar PNG
-    layoutEl.innerHTML = `<img id="imgLayout" alt="Acomodo" src="${data.image}"/>`;
+  if (!res.ok) {
+    layoutEl.innerHTML = `<div class="error">${(data && data.error) || 'Error en /api/run-cpsat'}</div>`;
+    if (data && data.stats) renderStats(data.stats);
+    return;
+  }
 
-    // Botón de descarga
-    btnDownload.href = data.image;
-    btnDownload.download = `acomodo_${(data.stats?.status||'OK').toLowerCase()}.png`;
-    btnDownload.style.display = 'inline-block';
+  // Mostrar PNG
+  layoutEl.innerHTML = `<img id="imgLayout" alt="Acomodo" src="${data.image}"/>`;
+
+  // Botón de descarga
+  btnDownload.href = data.image;
+  btnDownload.download = `acomodo_${((data.stats && data.stats.status) || 'OK').toLowerCase()}.png`;
+  btnDownload.style.display = 'inline-block';
 
     // Stats
     renderStats(data.stats || {});

@@ -4,3 +4,5 @@ pandas
 numpy
 ortools
 python-multipart
+matplotlib
+gunicorn

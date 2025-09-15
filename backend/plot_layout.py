@@ -9,6 +9,8 @@ Render de layout con Matplotlib:
 """
 
 from __future__ import annotations
+import matplotlib
+matplotlib.use("Agg")  # usar backend sin GUI en servidores/headless
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
