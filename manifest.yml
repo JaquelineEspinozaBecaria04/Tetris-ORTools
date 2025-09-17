@@ -1,8 +1,7 @@
 ---
 applications:
 - name: tetris-ortools-app   # <-- ¡Elige un nombre único!
-  memory: 1G                  # Empezamos con 1GB por ortools/pandas. Puedes ajustarlo luego.
+  memory: 2G                  # Empezamos con 1GB por ortools/pandas. Puedes ajustarlo luego.
   random-route: true
-  buildpacks:
-  - python_buildpack
-  command: gunicorn -w 4 -k uvicorn.workers.UvicornWorker backend.main:app
+  buildpack: python_buildpack
+  command: gunicorn --timeout 180 -w 4 -k uvicorn.workers.UvicornWorker backend.main:app
