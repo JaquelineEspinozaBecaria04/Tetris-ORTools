@@ -1,88 +1,143 @@
-// Frontend JS (modular y comentado)
-// - Ejecuta el endpoint /api/run-cpsat
-// - STOP: usa AbortController para cancelar la petición en curso
-// - Renderiza estadísticas y muestra/descarga el PNG generado
+// Frontend JS
+// - Llama /api/run-cpsat
+// - STOP con AbortController
+// - Muestra imagen PNG
+// - Descarga CSV sólo si backend devolvió URL válida
 
 const $ = (s)=>document.querySelector(s);
-const statsEl = $('#stats');
-const layoutEl = $('#layout');
-const btnRun = $('#btnRun');
-const btnStop = $('#btnStop');
-const btnDownload = $('#btnDownload');
 
-let currentAbort = null;   // controlador para STOP
+// helper para leer valores de inputs/selector
+function getValue(sel, fallback = '') {
+  const el = document.querySelector(sel);
+  return el ? el.value : fallback;
+}
 
-// Helpers de formato
+const statsEl        = $('#stats');
+const layoutEl       = $('#layout');
+const btnRun         = $('#btnRun');
+const btnStop        = $('#btnStop');
+const btnDownload    = $('#btnDownload');     // imagen
+const btnDownloadCSV = $('#btnDownloadCSV');  // csv
+
+let currentAbort = null;
+
 const fmtPct = (x)=> (isFinite(x) ? (x*100).toFixed(1)+'%' : '—');
 const safe   = (v)=> (v===0 || v ? v : '—');
 
+function hideDownloads() {
+  if (btnDownload)    btnDownload.style.display = 'none';
+  if (btnDownloadCSV) {
+    btnDownloadCSV.style.display = 'none';
+    btnDownloadCSV.removeAttribute('href');
+    btnDownloadCSV.removeAttribute('download');
+    btnDownloadCSV.dataset.ready = '0';
+  }
+}
+function showCsv(url, filename) {
+  if (!btnDownloadCSV) return;
+  if (url) {
+    btnDownloadCSV.href = url;
+    btnDownloadCSV.download = filename || 'tetris.csv';
+    btnDownloadCSV.dataset.ready = '1';
+    btnDownloadCSV.style.display = 'inline-block';
+  } else {
+    btnDownloadCSV.dataset.ready = '0';
+    btnDownloadCSV.style.display = 'none';
+  }
+}
+
+// bloquea descargas “vacías”
+if (btnDownloadCSV) {
+  btnDownloadCSV.addEventListener('click', (e)=>{
+    if (btnDownloadCSV.dataset.ready !== '1' || !btnDownloadCSV.href) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+}
+
+// estado inicial
+hideDownloads();
+
 btnRun.onclick = async () => {
-  const file = $('#csvFile').files[0];
+  const file = $('#csvFile')?.files?.[0];
   if (!file) { alert('Sube un CSV.'); return; }
 
-  // Preparación UI
+  // UI
   statsEl.innerHTML = '';
   layoutEl.innerHTML = '<i class="hint">Procesando…</i>';
   btnRun.disabled = true;
   btnStop.disabled = false;
-  btnDownload.style.display = 'none';
+  hideDownloads();
 
-  // Armar FormData
+  // FormData
   const fd = new FormData();
   fd.append('file', file);
-  fd.append('delimiter', $('#delimiter').value);
-  fd.append('algo', $('#algo').value);
-  // timeLimit se mantiene interno; si quieres, puedes exponerlo de nuevo
+  fd.append('delimiter', getValue('#delimiter', ''));
+  fd.append('algo', getValue('#algo', 'cpsat2'));
 
-  // AbortController para STOP
+  // Estilo IDATI por defecto (si tienes <select id="imageEngine"> lo toma de ahí)
+  fd.append('imageEngine', getValue('#imageEngine', 'plotly'));
+
+  // pedir CSV
+  fd.append('includeTable', 'true');
+
+  // AbortController
   currentAbort = new AbortController();
 
   try {
-  const res = await fetch('/api/run-cpsat', {
-    method: 'POST',
-    body: fd,
-    signal: currentAbort.signal
-  });
+    const res = await fetch('/api/run-cpsat', {
+      method: 'POST',
+      body: fd,
+      signal: currentAbort.signal
+    });
 
-  const contentType = res.headers.get('content-type') || '';
-  const text = await res.text();
+    const contentType = res.headers.get('content-type') || '';
+    const text = await res.text();
 
-  let data;
-  if (contentType.includes('application/json')) {
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      layoutEl.innerHTML = `<div class="error">Respuesta JSON inválida: ${text.slice(0,200)}</div>`;
+    let data;
+    if (contentType.includes('application/json')) {
+      try { data = JSON.parse(text); }
+      catch {
+        layoutEl.innerHTML = `<div class="error">Respuesta JSON inválida: ${text.slice(0,200)}</div>`;
+        return;
+      }
+    } else {
+      layoutEl.innerHTML = `<div class="error">Respuesta no-JSON (${res.status} ${res.statusText}): ${text.slice(0,200)}</div>`;
       return;
     }
-  } else {
-    // Muestra qué devolvió realmente (HTML de error, redirect, etc.)
-    layoutEl.innerHTML = `<div class="error">Respuesta no-JSON (${res.status} ${res.statusText}): ${text.slice(0,200)}</div>`;
-    return;
-  }
 
-  if (!res.ok) {
-    layoutEl.innerHTML = `<div class="error">${(data && data.error) || 'Error en /api/run-cpsat'}</div>`;
-    if (data && data.stats) renderStats(data.stats);
-    return;
-  }
+    if (!res.ok) {
+      layoutEl.innerHTML = `<div class="error">${(data && data.error) || 'Error en /api/run-cpsat'}</div>`;
+      if (data && data.stats) renderStats(data.stats);
+      hideDownloads();
+      return;
+    }
 
-  // Mostrar PNG
-  layoutEl.innerHTML = `<img id="imgLayout" alt="Acomodo" src="${data.image}"/>`;
+    // Imagen
+    layoutEl.innerHTML = `<img id="imgLayout" alt="Acomodo" src="${data.image}"/>`;
 
-  // Botón de descarga
-  btnDownload.href = data.image;
-  btnDownload.download = `acomodo_${((data.stats && data.stats.status) || 'OK').toLowerCase()}.png`;
-  btnDownload.style.display = 'inline-block';
+    // Descarga imagen
+    if (btnDownload) {
+      btnDownload.href = data.image;
+      const status = (data.stats && data.stats.status) ? String(data.stats.status).toLowerCase() : 'ok';
+      btnDownload.download = `acomodo_${status}.png`;
+      btnDownload.style.display = 'inline-block';
+    }
 
-    // Stats
+    // Descarga CSV
+    if (data.table && data.table.url) {
+      showCsv(data.table.url, data.table.filename);
+    } else {
+      showCsv(null);
+    }
+
     renderStats(data.stats || {});
   } catch (err) {
-    if (err.name === 'AbortError') {
-      layoutEl.innerHTML = `<div class="error">Ejecución cancelada.</div>`;
-    } else {
-      layoutEl.innerHTML = `<div class="error">${err.message}</div>`;
-    }
+    layoutEl.innerHTML = (err?.name === 'AbortError')
+      ? `<div class="error">Ejecución cancelada.</div>`
+      : `<div class="error">${err.message}</div>`;
+    hideDownloads();
   } finally {
     btnRun.disabled = false;
     btnStop.disabled = true;
@@ -90,12 +145,8 @@ btnRun.onclick = async () => {
   }
 };
 
-// STOP: cancela la petición actual
-btnStop.onclick = () => {
-  if (currentAbort) currentAbort.abort();
-};
+btnStop.onclick = () => { if (currentAbort) currentAbort.abort(); };
 
-// Render de estadísticas (las básicas se quedan; añadimos sugeridas)
 function renderStats(s) {
   statsEl.innerHTML = `
     <div class="stat"><b>Estado</b><div>${safe(s.status)}</div></div>
@@ -106,8 +157,6 @@ function renderStats(s) {
     <div class="stat"><b>Utilización</b><div>${fmtPct(s.utilization)}</div></div>
     <div class="stat"><b>Sin Uso</b><div>${fmtPct(s.empty_pct)}</div></div>
   `;
-
-  // Sugeridas: chips usados, util por host, histograma de huecos, AZs
   if (s.chips_used !== undefined) {
     statsEl.innerHTML += `<div class="stat"><b>Chips usados</b><div>${s.chips_used}</div></div>`;
   }
@@ -121,10 +170,9 @@ function renderStats(s) {
     statsEl.innerHTML += `<div class="stat"><b>AZ detectadas</b><div>${s.az_values.join(', ')}</div></div>`;
   }
   if (s.per_az) {
-    for (const [az,v] of Object.entries(s.per_az)) {
+    for (const [az, v] of Object.entries(s.per_az)) {
       statsEl.innerHTML += `<div class="stat"><b>${az}</b>
         <div>hosts: ${safe(v.hosts)}<br>utilidad: ${fmtPct(v.utilization)}</div></div>`;
     }
   }
-  // El histograma de huecos (opcional) lo podrías graficar con barras en una V2.
 }
