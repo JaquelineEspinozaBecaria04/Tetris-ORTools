@@ -76,27 +76,28 @@ def build_layout_dataframe(hosts) -> pd.DataFrame:
     # Orden recomendado (igual a tu notebook): por AZ, Host, Chip, Start
     chip_order = {"Chip 1": 0, "Chip 2": 1}
     df["_chip_order"] = df["Chip"].map(chip_order).fillna(0)
-    df = df.sort_values(by=["AZ","Host","_chip_order","Start"]).drop(columns=["_chip_order"]).reset_index(drop=True)
+    df = df.sort_values(by=["AZ","Host","_chip_order","Start"]).reset_index(drop=True)
 
-    # Campo auxiliar opcional: etiqueta única por host para el eje Y de Plotly
+    # Etiqueta de eje Y (útil para Plotly)
     df["host_chip"] = df["HOST"].astype(str) + " - " + df["AZ"] + " - " + df["Host"].astype(str)
 
-    # Campo 'Numero' como "k de total" por VM/AZ/Chip/Host (como tu PRIMER INTENTO)
-    # (solo para VMs reales; INFRA queda en blanco)
-    real_vm_mask = df["VM"] != "INFRA"
-    if real_vm_mask.any():
-        grp = df.loc[real_vm_mask].groupby(["VM","AZ","Chip","Host"], as_index=False)
-        # rango 1..n por grupo
-        df.loc[real_vm_mask, "_rank"] = grp.cumcount() + 1
-        # tamaño por grupo
-        sizes = grp.size().rename(columns={"size": "_n"})
-        df = df.merge(sizes, on=["VM","AZ","Chip","Host"], how="left")
-        df["Numero"] = df.apply(
-            lambda r: (f"{int(r['_rank'])} de {int(r['_n'])}") if r["VM"] != "INFRA" else "",
-            axis=1
-        )
-        df = df.drop(columns=["_rank","_n"])
-    else:
-        df["Numero"] = ""
+    # ======= NUEVO: Numero y Requerimiento globales por VM =======
+    real_mask = df["VM"].notna() & (df["VM"] != "INFRA")
+    real = df.loc[real_mask].copy()
+
+    real["_chip_order"] = real["Chip"].map(chip_order).fillna(0)
+    real = real.sort_values(by=["VM", "AZ", "_chip_order", "Host", "Start"], ascending=[True, True, True, True, True])
+
+    real["Requerimiento"] = real.groupby("VM")["VM"].transform("count").astype(int)
+    real["_k"] = real.groupby("VM").cumcount() + 1
+    real["Numero"] = real["_k"].astype(int).astype(str) + " de " + real["Requerimiento"].astype(int).astype(str)
+
+    df["Requerimiento"] = 0
+    df["Numero"] = ""
+    df.loc[real.index, "Requerimiento"] = real["Requerimiento"].values
+    df.loc[real.index, "Numero"] = real["Numero"].values
+
+    # Limpieza
+    df = df.drop(columns=["_chip_order"], errors="ignore")
 
     return df
