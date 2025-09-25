@@ -1,28 +1,27 @@
 # backend/plotly_layout.py
 from __future__ import annotations
 import plotly.graph_objects as go
-from .df_layout import build_layout_dataframe  # << NUEVO
+from .df_layout import build_layout_dataframe
+
 
 def render_layout_png_plotly(hosts, title: str = "", scale: int = 2, stats: dict | None = None) -> bytes:
-    df = build_layout_dataframe(hosts)  # << construir DF “IDATI-like”
+    df = build_layout_dataframe(hosts)
 
-    # Orden de hosts para el eje Y (de menor a mayor y luego invertimos como en tu notebook)
     ordered_hosts = (
-        df[["AZ","Host","host_chip"]]
+        df[["AZ", "Host", "host_chip"]]
         .drop_duplicates()
-        .sort_values(by=["AZ","Host"])["host_chip"]
-        .tolist()[::-1]  # invertir
+        .sort_values(by=["AZ", "Host"])["host_chip"]
+        .tolist()[::-1]
     )
 
     fig = go.Figure()
 
-    # Barras apiladas horizontales por fila de DF (exactamente como tu IDATI)
     for _, row in df.iterrows():
-        showlegend = False  # evitamos leyenda larga
         txt = (row["VM"] if row["VM"] != "INFRA" else None)
         hover = (
             f"<b>{row['VM']}</b><br>Longitud: {int(row['Length'])}"
-            f"<br>Anti-Afinidad: {int(row['Anti-Afinidad'])}<br>Pieza: {row['Numero']}<extra></extra>"
+            f"<br>Anti-Afinidad: {row.get('Anti-Afinidad','')}"
+            f"<br>Pieza: {row.get('Numero','')}<extra></extra>"
             if row["VM"] != "INFRA" else "<extra></extra>"
         )
         fig.add_trace(go.Bar(
@@ -37,21 +36,22 @@ def render_layout_png_plotly(hosts, title: str = "", scale: int = 2, stats: dict
             insidetextanchor="middle",
             textfont=dict(color="black", size=10),
             hovertemplate=hover,
-            showlegend=showlegend
+            showlegend=False,
         ))
 
     fig.update_layout(
         barmode="stack",
         title=title or "TETRIS (estilo IDATI)",
-        xaxis=dict(title="", tickmode="linear", dtick=1, range=[0, 40], showgrid=True),
+        xaxis=dict(title="", tickmode="linear", dtick=1, showgrid=True),
         yaxis=dict(title="Host", categoryorder="array", categoryarray=ordered_hosts),
         height=max(400, 34 * len(ordered_hosts) + 140),
-        showlegend=False
+        showlegend=False,
+        margin=dict(l=10, r=10, t=50, b=30),
     )
 
     # Exportar PNG via kaleido
-    png = fig.to_image(format="png", engine="kaleido", scale=scale)
-    return png
+    return fig.to_image(format="png", engine="kaleido", scale=scale)
+
 
 def render_layout_html_plotly(
     hosts,
@@ -59,28 +59,24 @@ def render_layout_html_plotly(
     include_plotlyjs: str = "cdn",
     full_html: bool = False,
 ) -> str:
-    import pandas as pd
-    from .df_layout import build_layout_dataframe
-    import plotly.graph_objects as go
-
     df = build_layout_dataframe(hosts)
 
     ordered_hosts = (
-        df[["AZ","Host","host_chip"]]
+        df[["AZ", "Host", "host_chip"]]
         .drop_duplicates()
-        .sort_values(by=["AZ","Host"])["host_chip"]
+        .sort_values(by=["AZ", "Host"])["host_chip"]
         .tolist()[::-1]
     )
 
     fig = go.Figure()
-    for _, r in df.sort_values(["AZ","Host","Chip","Start","VM"]).iterrows():
+    for _, r in df.sort_values(["AZ", "Host", "Chip", "Start", "VM"]).iterrows():
         host_chip = r["host_chip"]
         length = int(r["Length"])
-        start  = int(r["Start"])
-        vm     = str(r["VM"])
-        color  = str(r.get("Color", "#999999"))
-        numero = str(r.get("Numero",""))
-        anti   = str(r.get("Anti-Afinidad",""))
+        start = int(r["Start"])
+        vm = str(r["VM"])
+        color = str(r.get("Color", "#999999"))
+        numero = str(r.get("Numero", ""))
+        anti = str(r.get("Anti-Afinidad", ""))
 
         hovertemplate = (
             "<b>%{customdata[0]}</b><br>"
