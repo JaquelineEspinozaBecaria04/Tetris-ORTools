@@ -78,6 +78,9 @@ btnRun.onclick = async () => {
 
   // Estilo IDATI por defecto (si tienes <select id="imageEngine"> lo toma de ahí)
   fd.append('imageEngine', getValue('#imageEngine', 'plotly'));
+    // NUEVO: formato de salida (por ahora usamos HTML por defecto si no hay selector)
+  fd.append('outputFormat', getValue('#outputFormat', 'html'));
+
 
   // pedir CSV
   fd.append('includeTable', 'true');
@@ -115,7 +118,19 @@ btnRun.onclick = async () => {
     }
 
     // Imagen
-    layoutEl.innerHTML = `<img id="imgLayout" alt="Acomodo" src="${data.image}"/>`;
+    //layoutEl.innerHTML = `<img id="imgLayout" alt="Acomodo" src="${data.image}"/>`;
+
+        // Render del resultado (HTML interactivo > PNG)
+    if (data.html_url) {
+      layoutEl.innerHTML = `
+        <div class="html-wrapper">
+          <iframe id="htmlLayout" class="html-frame" src="${data.html_url}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+        </div>`;
+    } else if (data.image) {
+      layoutEl.innerHTML = `<img id="imgLayout" alt="Acomodo" src="${data.image}"/>`;
+    } else {
+      layoutEl.innerHTML = `<div class="error">No se recibió ni html_url ni image.</div>`;
+    }
 
     // Descarga imagen
     if (btnDownload) {

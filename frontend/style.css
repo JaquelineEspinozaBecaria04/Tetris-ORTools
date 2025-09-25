@@ -113,3 +113,16 @@ input, select, button, label, textarea {
   font-size: inherit;
   line-height: inherit;
 }
+
+/* --- HTML interactivo incrustado --- */
+.html-wrapper {
+  width: 100%;
+  overflow: auto;
+}
+
+.html-frame {
+  width: 100%;
+  min-height: 640px;   /* ajusta a tu gusto */
+  border: 0;
+  display: block;
+}

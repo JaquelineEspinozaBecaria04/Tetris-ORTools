@@ -6,3 +6,5 @@ ortools
 python-multipart
 matplotlib
 gunicorn
+plotly
+kaleido
