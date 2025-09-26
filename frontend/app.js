@@ -12,12 +12,27 @@ function getValue(sel, fallback = "") {
   return el ? el.value : fallback;
 }
 
+function fitIframeToContent(iframe) {
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    const h = Math.max(
+      doc.documentElement ? doc.documentElement.scrollHeight : 0,
+      doc.body ? doc.body.scrollHeight : 0
+    );
+    iframe.style.height = h + "px";
+    iframe.style.width = "100%";
+  } catch (e) {}
+}
+
+
 const statsEl        = $("#stats");
 const layoutEl       = $("#layout");
 const btnRun         = $("#btnRun");
 const btnStop        = $("#btnStop");
 const btnDownload    = $("#btnDownload");     // PNG
 const btnDownloadCSV = $("#btnDownloadCSV");  // CSV
+
+let currentRefitHandler = null;
 
 let currentAbort = null;
 
@@ -120,9 +135,27 @@ btnRun.onclick = async () => {
 
     if (htmlUrl) {
       layoutEl.innerHTML = `
-        <div class="html-wrapper">
-          <iframe id="htmlLayout" class="html-frame" src="${htmlUrl}" loading="lazy" referrerpolicy="no-referrer"></iframe>
-        </div>`;
+          <div class="html-wrapper">
+            <iframe id="htmlLayout" class="html-frame" src="${htmlUrl}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+          </div>`;
+
+        const ifr = document.getElementById("htmlLayout");
+
+        if (currentRefitHandler) {
+          window.removeEventListener("resize", currentRefitHandler);
+          currentRefitHandler = null;
+        }
+        const refit = () => fitIframeToContent(ifr);
+
+        ifr.addEventListener("load", () => {
+          refit();
+          setTimeout(refit, 50);
+          setTimeout(refit, 250);
+          setTimeout(refit, 500);
+        });
+
+        currentRefitHandler = refit;
+        window.addEventListener("resize", currentRefitHandler, { passive: true });
     } else if (pngData) {
       layoutEl.innerHTML = `<img id="imgLayout" alt="Acomodo" src="${pngData}"/>`;
     } else {

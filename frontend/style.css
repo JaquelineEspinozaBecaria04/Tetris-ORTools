@@ -114,15 +114,15 @@ input, select, button, label, textarea {
   line-height: inherit;
 }
 
-/* --- HTML interactivo incrustado --- */
-.html-wrapper {
-  width: 100%;
-  overflow: auto;
+/* --- Contenedor de resultados: permitir crecer en altura --- */
+.layout {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 0.5rem; /* opcional, para que el iframe no pegue al borde */
 }
 
-.html-frame {
-  width: 100%;
-  min-height: 640px;   /* ajusta a tu gusto */
-  border: 0;
-  display: block;
-}
+/* --- Iframe: ancho completo, alto lo fija JS --- */
+.html-wrapper { width: 100%; overflow: visible; }
+.html-frame   { width: 100%; height: 0; border: 0; display: block; }
+

@@ -105,4 +105,18 @@ def render_layout_html_plotly(
         margin=dict(l=10, r=10, t=50, b=30),
     )
 
+    # HTML responsive, sin márgenes de body y sin scroll interno
+    html = fig.to_html(
+        full_html=True,                 # página completa dentro del iframe
+        include_plotlyjs="cdn",
+        config={"responsive": True},    # ancho 100% del iframe
+    )
+
+    # Quitar márgenes y ocultar scroll del documento interno
+    html = html.replace(
+        "</head>",
+        "<style>html,body{margin:0;padding:0;overflow:hidden}</style></head>"
+    )
+    return html
+
     return fig.to_html(full_html=full_html, include_plotlyjs=include_plotlyjs)
