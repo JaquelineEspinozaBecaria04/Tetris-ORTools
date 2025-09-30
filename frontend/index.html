@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <title>VM Packing — Solvers</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
+
+</head>
+<body>
+<header class="page-header">
+  <div class="brand">
+    <img src="/media/Telcel_logo.png" alt="Logo izquierdo" class="logo logo-left">
+    <div class="titles">
+      <h1>Telcel Capacity Planning</h1>
+      <p class="subtitle">Optimización de VMs</p>
+    </div>
+    <img src="/media/LogoCID.jpg" alt="Logo derecho" class="logo logo-right">
+  </div>
+</header>
+  <div class="wrap">
+    <div class="card">
+      <div class="section-title">Entrada</div>
+      <div class="grid">
+        <div class="grid-item">
+          <label>Catálogo (.csv o .xlsx)</label>
+          <input type="file" id="csvFile" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"/>
+        </div>
+        <div class="grid-item">
+          <label>Algoritmo</label>
+          <select id="algo">
+            <option value="cpsat2">CP-SAT (2 fases)</option>
+            <option value="cpsat">CP-SAT (1 fase)</option>
+            <option value="sa">Recocido Simulado</option>
+          </select>
+        </div>
+        <div class="grid-item">
+          <label>Acciones</label>
+          <div class="row">
+            <button id="btnRun" class="btn primary">Ejecutar</button>
+            <button id="btnStop" class="btn danger" disabled>STOP</button>
+            <a id="btnDownload" class="btn success" style="display:none;" download="acomodo.png">Descargar PNG</a>
+            <a id="btnDownloadCSV" class="btn success" href="#" download="tetris.csv">Descargar CSV</a>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <label for="outputFormat">Formato de salida</label>
+        <select id="outputFormat">
+          <option value="html" selected>HTML interactivo (Plotly)</option>
+          <option value="png">PNG</option>
+          <option value="both">Ambos</option>
+        </select>
+      </div>
+      <div class="legend">Columnas: Inst, VNF, VNFC, Color, Longitud, AZ, Anti-afinidad, Requerimiento</div>
+    </div>
+    <div class="card">
+      <div class="section-title">Resultados</div>
+      <div id="stats" class="stats"></div>
+      <div id="layout" class="layout"><i class="hint">Sube un archivo y ejecuta para ver el layout…</i></div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
