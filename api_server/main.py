@@ -1,5 +1,3 @@
-# api_server/main.py (Versión Final y Corregida)
-
 import os, time, io, base64
 from pathlib import Path
 
@@ -10,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from .io_utils import load_vms_from_file
 from .solver_cpsat import CpsatPacker, SolverParams
 from .solver_sa import SaPacker
+from .solver_idati import IdatiPacker
 from .plot_layout import render_layout_png as render_mpl_png
 try:
     from .plotly_layout import (
@@ -62,13 +61,16 @@ async def run_cpsat(
 
     params = SolverParams(enforce_az_per_host=True, time_limit_s=float(timeLimit))
 
-    if algo == "sa":
+    if algo == "idati":
+        packer = IdatiPacker(vms, params)
+        hosts, stats = packer.solve()
+    elif algo == "sa":
         packer = SaPacker(vms, params)
         hosts, stats = packer.solve()
-    else:
+    else:  
         packer = CpsatPacker(vms, params)
         if algo == "cpsat2":
-            hosts, stats = packer.solve_two_phase()
+            host, stats= packer.solve_two_phase()
         else:
             hosts, stats = packer.solve()
 
@@ -124,9 +126,6 @@ async def run_cpsat(
 
 
 # --- Montaje de directorios estáticos ---
-# <<< CAMBIO CRÍTICO: Se corrige la ruta para que apunte a 'frontend' en lugar de 'frontend/static' >>>
-# El HTML pide /static/app.js, por lo que montamos la carpeta 'frontend' en la URL '/static'
-# para que FastAPI pueda encontrar 'frontend/app.js'
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "frontend")), name="static")
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 
