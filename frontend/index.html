@@ -26,14 +26,13 @@
       <div class="section-title">Entrada</div>
       <div class="grid">
         <div class="grid-item">
-          <label>Catálogo (.csv o .xlsx)</label>
+          <label>Seleccione catálogo (.csv o .xlsx)</label>
           <input type="file" id="csvFile" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"/>
         </div>
         <div class="grid-item">
           <label>Algoritmo</label>
           <select id="algo">
-            <option value="cpsat2">CP-SAT (2 fases)</option>
-            <option value="cpsat">CP-SAT (1 fase)</option>
+            <option value="cpsat2">OR-Tools</option>
             <option value="sa">Recocido Simulado</option>
             <option value="idati">IDATI (Algoritmo de la casa)</option>
           </select>
@@ -43,7 +42,7 @@
           <div class="row">
             <button id="btnRun" class="btn primary">Ejecutar</button>
             <button id="btnStop" class="btn danger" disabled>STOP</button>
-            <a id="btnDownload" class="btn success" style="display:none;" download="acomodo.png">Descargar PNG</a>
+            <!-- <a id="btnDownload" class="btn success" style="display:none;" download="acomodo.png">Descargar PNG</a> -->
             <a id="btnDownloadCSV" class="btn success" href="#" download="tetris.csv">Descargar CSV</a>
           </div>
         </div>
@@ -52,8 +51,8 @@
         <label for="outputFormat">Formato de salida</label>
         <select id="outputFormat">
           <option value="html" selected>HTML interactivo (Plotly)</option>
-          <option value="png">PNG</option>
-          <option value="both">Ambos</option>
+          <!-- <option value="png">PNG</option>
+          <option value="both">Ambos</option> -->
         </select>
       </div>
       <div class="legend">Columnas: Inst, VNF, VNFC, Color, Longitud, AZ, Anti-afinidad, Requerimiento</div>

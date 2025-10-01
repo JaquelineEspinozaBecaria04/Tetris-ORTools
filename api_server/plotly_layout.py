@@ -93,17 +93,23 @@ def render_layout_html_plotly(
             customdata=[[vm, length, anti, numero]],
             showlegend=False,
             name=vm if vm != "INFRA" else "",
+            text = vm,
         ))
 
     fig.update_layout(
         barmode="stack",
         title=title,
-        xaxis=dict(title="", tickmode="linear", dtick=1, showgrid=True),
+        xaxis=dict(title="", tickmode="linear", dtick=1, showgrid=True, range=[0,40]),
         yaxis=dict(title="Host", categoryorder="array", categoryarray=ordered_hosts),
         height=max(420, 34 * len(ordered_hosts) + 160),
         showlegend=False,
         margin=dict(l=10, r=10, t=50, b=30),
     )
+    fig.update_traces(
+    textposition='inside',
+    insidetextanchor='middle',
+    textfont=dict(color='black', size=10),
+    marker = dict(line = dict(width = 1.5, color = 'black')))
 
     # HTML responsive, sin márgenes de body y sin scroll interno
     html = fig.to_html(
