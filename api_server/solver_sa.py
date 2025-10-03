@@ -14,9 +14,7 @@ from .models import (
 from .solver_cpsat import SolverParams
 
 # ==============================================================================
-# 1. CÓDIGO DEL ALGORITMO ORIGINAL (recocidos.py) RESTAURADO Y ADAPTADO
-#    Las funciones ahora respetan la lógica de anti-afinidad y la
-#    búsqueda de vecinos del script original.
+# 1. RECOCIDO SIMULADO (Lógica del algoritmo)
 # ==============================================================================
 
 def generar_solucion_inicial(vmf: List[Dict], cores: int, az: int, numero_hosts_por_az: List[int]) -> Tuple[List[Dict], List, List[int]]:
@@ -26,7 +24,7 @@ def generar_solucion_inicial(vmf: List[Dict], cores: int, az: int, numero_hosts_
     random.shuffle(vmf)
     solucion = []
     
-    # ESTRUCTURA DE DATOS RESTAURADA:
+    # ESTRUCTURA DE DATOS PARA EL SERVIDOR TETRIS
     # El primer elemento de la lista de cada chip es la capacidad restante.
     # Los elementos siguientes son los nombres de las VMs para el control de anti-afinidad.
     servidor_tetris = [[[ [cores] for _ in range(CHIPS_PER_HOST)] for _ in range(numero_hosts_por_az[i])] for i in range(az)]
@@ -41,7 +39,7 @@ def generar_solucion_inicial(vmf: List[Dict], cores: int, az: int, numero_hosts_
         for i, host in enumerate(servidor_tetris[zona_idx]):
             vms_en_host = host[0][1:] + host[1][1:] # Nombres de VMs en ambos chips
             
-            # LÓGICA DE ANTI-AFINIDAD RESTAURADA
+            # LÓGICA DE ANTI-AFINIDAD 
             if vms_en_host.count(nombre) < max_piezas:
                 # Intentar en Chip 1
                 cores_restantes_c1 = host[0][0]
@@ -53,7 +51,7 @@ def generar_solucion_inicial(vmf: List[Dict], cores: int, az: int, numero_hosts_
                         'core_inicio': cores - cores_restantes_c1,
                         'max_piezas': max_piezas, 'zona_idx': zona_idx, 'color': clase['color'],
                         'instancia': clase['instancia'],
-                        'pos_relativa': host[chip_idx].count(nombre) + 1 # Necesario para generar_vecino
+                        'pos_relativa': host[chip_idx].count(nombre) + 1 
                     }
                     solucion.append(asignacion)
                     host[chip_idx][0] -= longitud
@@ -79,7 +77,7 @@ def generar_solucion_inicial(vmf: List[Dict], cores: int, az: int, numero_hosts_
                     aceptada = True
                     break
         
-    # Limpiar hosts no utilizados (lógica mejorada de solver_sa)
+    # Limpiar hosts no utilizados
     servidor_tetris_final = []
     hosts_usados_por_az = [0] * az
     host_map = {} # (zona, viejo_host_idx) -> nuevo_host_idx
@@ -256,8 +254,7 @@ def recocido_simulado(vmf, cores, az, numero_hosts_por_az, max_piezas_map, param
     return mejor_solucion, sum(mejor_hosts_usados), iteracion
 
 # ==============================================================================
-# 2. CLASE ADAPTADORA `SaPacker` (Interfaz con la aplicación)
-#    (Prácticamente sin cambios, ahora llama a la lógica restaurada)
+# 2. CLASE ADAPTADORA `SaPacker`
 # ==============================================================================
 
 class SaPacker:
@@ -297,7 +294,7 @@ class SaPacker:
         if not solucion_final:
             return [], {"status": "INFEASIBLE", "hosts": 0}
             
-        # --- Adaptación de Salida (sin cambios) ---
+        # --- Adaptación de Salida ---
         hosts_dict = {}
         for vm_colocada in solucion_final:
             az_idx, host_idx, chip_idx = vm_colocada['zona_idx'], vm_colocada['host'], vm_colocada['chip'] - 1
@@ -324,7 +321,7 @@ class SaPacker:
                 for placement in chip.items:
                     placement.host_id = host.id
 
-        # --- Estandarización de Estadísticas (sin cambios) ---
+        # --- Estandarización de Estadísticas ---
         total_capacity = len(hosts_list) * HOST_CAPACITY
         total_used = sum(h.used for h in hosts_list)
         util = (total_used / total_capacity) if total_capacity else 0.0

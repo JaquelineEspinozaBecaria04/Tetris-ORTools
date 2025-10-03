@@ -70,7 +70,7 @@ async def run_cpsat(
     else:  
         packer = CpsatPacker(vms, params)
         if algo == "cpsat2":
-            host, stats= packer.solve_two_phase()
+            hosts, stats= packer.solve_two_phase()
         else:
             hosts, stats = packer.solve()
 
