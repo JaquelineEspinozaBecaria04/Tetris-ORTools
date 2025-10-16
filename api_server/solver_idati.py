@@ -13,7 +13,6 @@ from .solver_cpsat import SolverParams
 
 # =======================================================
 # FUNCIONES ORIGINALES DEL ALGORITMO IDATI
-# Estas funciones se mantienen sin cambios en su lógica interna.
 # =======================================================
 
 def f_reducir_anti_afinidad(requerimiento: pd.DataFrame) -> pd.DataFrame:
@@ -210,7 +209,7 @@ class IdatiPacker:
         host_utils = [ df_host.loc[df_host["VM"] != "INFRA", "Length"].sum() / HOST_CAPACITY for _, df_host in df.groupby(by='HOST') ] if used_hosts > 0 else []
         
         stats = {
-            "status": "COMPUTED", "hosts": used_hosts, "total_used": total_used,
+            "status": "FEASIBLE", "hosts": used_hosts, "total_used": total_used,
             "total_capacity": total_capacity, "utilization": util, "empty_pct": 1 - util,
             "chips_used": chips_used, "holes_histogram": {str(k): v for k, v in holes_hist.items()},
             "host_utilization": {

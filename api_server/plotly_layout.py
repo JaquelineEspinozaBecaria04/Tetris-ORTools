@@ -56,8 +56,8 @@ def render_layout_png_plotly(hosts, title: str = "", scale: int = 2, stats: dict
 def render_layout_html_plotly(
     hosts,
     title: str = "TETRIS (estilo IDATI)",
-    include_plotlyjs: str = "cdn",
-    full_html: bool = False,
+    # include_plotlyjs: str = True,
+    # full_html: bool = False,
 ) -> str:
     df = build_layout_dataframe(hosts)
 

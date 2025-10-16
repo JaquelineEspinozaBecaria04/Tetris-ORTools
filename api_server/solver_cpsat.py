@@ -105,7 +105,7 @@ class CpsatPacker:
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = float(self.params.time_limit_s)
         solver.parameters.num_search_workers = 8
-        # solver.parameters.log_search_progress = True  # si quieres logs
+        # solver.parameters.log_search_progress = True  
 
         res = solver.Solve(model)
         STATUS_MAP = {

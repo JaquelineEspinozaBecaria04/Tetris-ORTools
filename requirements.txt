@@ -1,0 +1,15 @@
+# Framework y Servidor
+fastapi
+uvicorn[standard]
+python-multipart
+# Manipulación de Datos y Excel
+pandas
+numpy
+openpyxl
+# Solvers y Algoritmos
+ortools
+scipy
+# Visualización y Gráficos
+plotly
+kaleido
+matplotlib

@@ -183,7 +183,7 @@ def generar_vecino(solucion_actual, servidor_actual, T_inicial, T_actual, vmf_or
         aceptada = False
         longitud, nombre, zona_idx, max_piezas = clase['longitud'], clase['nombre'], clase['zona_idx'], clase['max_piezas']
         
-        # Misma lógica de inserción que en generar_solucion_inicial
+        
         for i, host in enumerate(servidor_vecino[zona_idx]):
             vms_en_host = host[0][1:] + host[1][1:]
             if vms_en_host.count(nombre) < max_piezas:

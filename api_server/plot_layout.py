@@ -149,7 +149,7 @@ def render_layout_png(hosts, title: str = "", dpi: int = 170, stats: dict | None
     if not title:
         title = f"Acomodo final por host (CP-SAT). Hosts = {len(hosts_sorted)} | Capacidad usable/host = {HOST_CAPACITY} (17x2)"
         if stats:
-            # si hay % utilización úsalo en el título
+            
             util = stats.get("utilization", None)
             if util is not None:
                 title += f" | Utilización: {util:.1%}"

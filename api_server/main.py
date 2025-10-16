@@ -104,8 +104,8 @@ async def run_cpsat(
         html = render_plotly_html(
             hosts,
             title="TETRIS (Resultado del Solver)",
-            include_plotlyjs="cdn",
-            full_html=False,
+            # include_plotlyjs="cdn",
+            # full_html=False,
         )
         html_name = f"layout_{ts}.html"
         (GENERATED_DIR / html_name).write_text(html, encoding="utf-8")

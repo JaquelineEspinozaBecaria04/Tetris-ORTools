@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 from typing import List, Dict, Tuple
 
-# mismas constantes que models.py
+
 CHIPS_PER_HOST = 2
 CHIP_TOTAL = 20
 CHIP_CAPACITY = 17
@@ -47,7 +47,7 @@ def build_layout_dataframe(hosts) -> pd.DataFrame:
                     "Host": local_counter,            # local dentro de AZ
                     "Chip": chip_label,               # 'Chip 1' / 'Chip 2'
                     "VM": f"{vm.vm_type.vnf} {vm.vm_type.vnfc}",
-                    "Start": plc.start + (0 if c_idx == 1 else 20),  # para eje 0..40 estilo IDATI
+                    "Start": plc.start + (0 if c_idx == 1 else 20),  
                     "Length": vm.size,
                     "Color": vm.color,
                     "Inst.": vm.inst,
@@ -55,7 +55,7 @@ def build_layout_dataframe(hosts) -> pd.DataFrame:
                     "HOST": global_counter            # global acumulado
                 })
 
-            # Franja reservada [17..20) como fila 'INFRA' (opcional, útil para reproducir tu look)
+            
             rows.append({
                 "AZ": H.az,
                 "Host": local_counter,
