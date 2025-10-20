@@ -113,8 +113,8 @@ def render_layout_html_plotly(
 
     # HTML responsive, sin márgenes de body y sin scroll interno
     html = fig.to_html(
-        full_html=True,                 # página completa dentro del iframe
-        include_plotlyjs="cdn",
+        # full_html=True,                 # página completa dentro del iframe
+        # include_plotlyjs="cdn",
         config={"responsive": True},    # ancho 100% del iframe
     )
 
