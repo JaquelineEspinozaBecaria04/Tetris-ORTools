@@ -1,8 +1,12 @@
+# api_server/solver_cpsat.py (Versión Final con Modelo de Empaquetado Optimizado)
+
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 import math
 from ortools.sat.python import cp_model
+
+from .df_layout import build_layout_dataframe
 
 from .models import (
     VM, VMType, Placement, HostResult, ChipResult,
@@ -13,360 +17,213 @@ from .models import (
 class SolverParams:
     enforce_az_per_host: bool = True
     time_limit_s: float = 15.0
-    weight_hosts: int = 1_000_000  # objetivo lexicográfico aproximado
-    weight_slack: int = 1          # penaliza espacio libre por chip (suave)
 
 class CpsatPacker:
     def __init__(self, vms: List[VM], params: SolverParams):
         self.vms = vms
         self.params = params
         self.az_values = sorted(list({vm.az for vm in vms}))
+        self.vm_types = {vm.vm_type.key(): vm.anti for vm in vms}
 
     def _bounds_hosts(self) -> Tuple[int, int]:
+        """Calcula el número mínimo (lb) y máximo (ub) de hosts a considerar."""
         total_size = sum(vm.size for vm in self.vms)
         lb1 = math.ceil(total_size / HOST_CAPACITY)
-        # anti-afinidad: por tipo t con límite k, LB >= ceil(n_t / k)
-        counts: Dict[Tuple[str,str], int] = {}
-        anti: Dict[Tuple[str,str], int] = {}
+        
+        counts = {key: 0 for key in self.vm_types}
         for vm in self.vms:
-            k = vm.vm_type.key()
-            counts[k] = counts.get(k, 0) + 1
-            anti[k] = vm.anti
+            counts[vm.vm_type.key()] += 1
+        
         lb2 = 0
         for k, n in counts.items():
-            lb2 = max(lb2, math.ceil(n / max(1, anti[k])))
+            lb2 = max(lb2, math.ceil(n / max(1, self.vm_types[k])))
+        
         lb = max(lb1, lb2)
-        ub = len(self.vms)  # cota superior segura (1 VM por host)
-        return lb, ub
+        # Cota superior optimizada: el mínimo + 30% de margen + 10 de colchón.
+        ub = math.ceil(lb * 1.3) + 10
+        return int(lb), int(ub)
 
     def solve(self) -> Tuple[List[HostResult], Dict]:
-        model = cp_model.CpModel()
-        n = len(self.vms)
-        lb, ub = self._bounds_hosts()
-        H = ub  # candidatos de host
+        """Punto de entrada principal que redirige al método optimizado de dos fases."""
+        return self.solve_two_phase()
 
-        # --- variables ---
-        x, u, v, y = {}, {}, {}, {}
-        for h in range(H):
-            u[h] = model.NewBoolVar(f"u[{h}]")
-            for c in range(CHIPS_PER_HOST):
-                v[h,c] = model.NewBoolVar(f"v[{h},{c}]")
-
-        if self.params.enforce_az_per_host:
-            for h in range(H):
-                for a in self.az_values:
-                    y[h,a] = model.NewBoolVar(f"y[{h},{a}]")
-                model.Add(sum(y[h,a] for a in self.az_values) <= u[h])  # a lo sumo una AZ si se usa
-
-        for i in range(n):
-            for h in range(H):
-                for c in range(CHIPS_PER_HOST):
-                    x[i,h,c] = model.NewBoolVar(f"x[{i},{h},{c}]")
-                    model.Add(x[i,h,c] <= u[h])
-                    model.Add(x[i,h,c] <= v[h,c])
-                    if self.params.enforce_az_per_host:
-                        model.Add(x[i,h,c] <= y[h, self.vms[i].az])
-
-        # --- restricciones ---
-        # cada VM exactamente en 1 chip
-        for i in range(n):
-            model.Add(sum(x[i,h,c] for h in range(H) for c in range(CHIPS_PER_HOST)) == 1)
-
-        # capacidad por chip (17)
-        for h in range(H):
-            for c in range(CHIPS_PER_HOST):
-                model.Add(sum(self.vms[i].size * x[i,h,c] for i in range(n)) <= CHIP_CAPACITY)
-
-        # anti-afinidad por (VNF, VNFC) en cada host
-        types = {}
-        for i, vm in enumerate(self.vms):
-            types.setdefault(vm.vm_type.key(), []).append(i)
-        for h in range(H):
-            for tkey, idxs in types.items():
-                k_lim = max(1, self.vms[idxs[0]].anti)
-                model.Add(sum(x[i,h,c] for i in idxs for c in range(CHIPS_PER_HOST)) <= k_lim)
-
-        # objetivo: minimizar hosts y luego slack global
-        cap = CHIP_CAPACITY
-        slack_terms = []
-        for h in range(H):
-            for c in range(CHIPS_PER_HOST):
-                expr_used = sum(self.vms[i].size * x[i,h,c] for i in range(n))
-                slack_terms.append(cap * v[h,c] - expr_used)
-
-        model.Minimize(
-            self.params.weight_hosts * sum(u[h] for h in range(H)) +
-            self.params.weight_slack * sum(slack_terms)
-        )
-
-        # Sugerencia: al menos lb hosts (no debe volver el modelo infeasible)
-        model.Add(sum(u[h] for h in range(H)) >= lb)
-
-        solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = float(self.params.time_limit_s)
-        solver.parameters.num_search_workers = 8
-        # solver.parameters.log_search_progress = True  
-
-        res = solver.Solve(model)
-        STATUS_MAP = {
-            cp_model.OPTIMAL: "OPTIMAL",
-            cp_model.FEASIBLE: "FEASIBLE",
-            cp_model.INFEASIBLE: "INFEASIBLE",
-            cp_model.MODEL_INVALID: "MODEL_INVALID",
-            cp_model.UNKNOWN: "UNKNOWN",
-        }
-        status_name = STATUS_MAP.get(res, str(res))
-
-        if res not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            # devolver stats informativas aunque no haya hosts
-            return [], {
-                "status": status_name,
-                "hosts": 0,
-                "total_used": 0,
-                "total_capacity": 0,
-                "utilization": 0.0,
-                "empty_pct": 1.0,
-                "per_az": {}
-            }
-
-        # --- construir solución ---
-        used_hosts = [h for h in range(H) if solver.Value(u[h]) == 1]
-        host_id_map = {h: idx+1 for idx, h in enumerate(used_hosts)}
-        hosts_out = {}
-
-        for h in used_hosts:
-            az = "MIX"
-            if self.params.enforce_az_per_host:
-                for a in self.az_values:
-                    if solver.Value(y[h,a]) == 1:
-                        az = a
-                        break
-            hosts_out[h] = HostResult(id=host_id_map[h], az=az, chips=[ChipResult(), ChipResult()])
-
-        for i, vm in enumerate(self.vms):
-            for h in used_hosts:
-                done = False
-                for c in range(CHIPS_PER_HOST):
-                    if solver.Value(x[i,h,c]) == 1:
-                        chip = hosts_out[h].chips[c]
-                        start = chip.used
-                        end = start + vm.size
-                        chip.items.append(Placement(vm=vm, host_id=hosts_out[h].id, chip_idx=c, start=start, end=end))
-                        chip.used += vm.size
-                        done = True
-                        break
-                if done:
-                    break
-
-        hosts_list = list(hosts_out.values())
-        hosts_list.sort(key=lambda H: (H.az, H.id))
-
-        total_capacity = len(hosts_list) * HOST_CAPACITY
-        total_used = sum(h.used for h in hosts_list)
-        util = (total_used / total_capacity) if total_capacity else 0.0
-
-        per_az = {}
-        for h in hosts_list:
-            a = h.az
-            per_az.setdefault(a, {"hosts":0,"used":0,"capacity":0})
-            per_az[a]["hosts"] += 1
-            per_az[a]["used"] += h.used
-            per_az[a]["capacity"] += HOST_CAPACITY
-
-        stats = {
-            "status": status_name,
-            "hosts": len(hosts_list),
-            "total_used": total_used,
-            "total_capacity": total_capacity,
-            "utilization": util,
-            "empty_pct": 1 - util,
-            "per_az": {a: {**v, "utilization": (v["used"]/v["capacity"]) if v["capacity"] else 0.0} for a, v in per_az.items()}
-        }
-        return hosts_list, stats
-    
     def solve_two_phase(self) -> tuple[list[HostResult], dict]:
-        """Fase 1: min #hosts. Fase 2: fija #hosts y minimiza chips usados y slack."""
-        # ---------- FASE 1: solo #hosts ----------
-        from ortools.sat.python import cp_model
-        n = len(self.vms)
+        """Resuelve el problema en dos fases para mayor eficiencia."""
+        # --- FASE 1: Encontrar el número mínimo de hosts ---
+        model1 = cp_model.CpModel()
         lb, ub = self._bounds_hosts()
-        H = ub
+        
+        # Se construye un modelo cuyo único objetivo es minimizar los hosts usados.
+        placements1, hosts_used1 = self._build_model_final(model1, ub)
+        model1.Minimize(sum(hosts_used1))
+        
+        solver1 = cp_model.CpSolver()
+        solver1.parameters.max_time_in_seconds = float(self.params.time_limit_s)
+        solver1.parameters.num_search_workers = 8 # Usar múltiples núcleos de CPU
+        status1 = solver1.Solve(model1)
 
-        def build_model(weights, fix_hosts: int | None):
-            model = cp_model.CpModel()
-            x, u, v, y = {}, {}, {}, {}
-            for h in range(H):
-                u[h] = model.NewBoolVar(f"u[{h}]")
-                for c in range(CHIPS_PER_HOST):
-                    v[h,c] = model.NewBoolVar(f"v[{h},{c}]")
-            if self.params.enforce_az_per_host:
-                for h in range(H):
-                    for a in self.az_values:
-                        y[h,a] = model.NewBoolVar(f"y[{h},{a}]")
-                    model.Add(sum(y[h,a] for a in self.az_values) <= u[h])
+        if status1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            return [], {"status": solver1.StatusName(status1), "hosts": 0}
+        
+        best_hosts_count = int(solver1.ObjectiveValue())
 
-            for i in range(n):
-                for h in range(H):
-                    for c in range(CHIPS_PER_HOST):
-                        x[i,h,c] = model.NewBoolVar(f"x[{i},{h},{c}]")
-                        model.Add(x[i,h,c] <= u[h])
-                        model.Add(x[i,h,c] <= v[h,c])
-                        if self.params.enforce_az_per_host:
-                            model.Add(x[i,h,c] <= y[h, self.vms[i].az])
+        # --- FASE 2: Con el número de hosts ya fijo, buscar un mejor empaquetado ---
+        model2 = cp_model.CpModel()
+        placements2, hosts_used2 = self._build_model_final(model2, best_hosts_count)
+        model2.Add(sum(hosts_used2) == best_hosts_count)
+        
+        solver2 = cp_model.CpSolver()
+        solver2.parameters.max_time_in_seconds = float(self.params.time_limit_s)
+        solver2.parameters.num_search_workers = 8
+        status2 = solver2.Solve(model2)
 
-            # exactitud
-            for i in range(n):
-                model.Add(sum(x[i,h,c] for h in range(H) for c in range(CHIPS_PER_HOST)) == 1)
-            # capacidad
-            for h in range(H):
-                for c in range(CHIPS_PER_HOST):
-                    model.Add(sum(self.vms[i].size * x[i,h,c] for i in range(n)) <= CHIP_CAPACITY)
-            # anti-afinidad por host
-            types = {}
-            for i, vm in enumerate(self.vms):
-                types.setdefault(vm.vm_type.key(), []).append(i)
-            for h in range(H):
-                for tkey, idxs in types.items():
-                    k_lim = max(1, self.vms[idxs[0]].anti)
-                    model.Add(sum(x[i,h,c] for i in idxs for c in range(CHIPS_PER_HOST)) <= k_lim)
+        if status2 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            print("ADVERTENCIA: Fase 2 no encontró solución, devolviendo resultado de Fase 1.")
+            return self._extract_solution(solver1, placements1)
 
-            # fijar hosts si se pide
-            if fix_hosts is not None:
-                model.Add(sum(u[h] for h in range(H)) == fix_hosts)
-            else:
-                model.Add(sum(u[h] for h in range(H)) >= lb)
+        return self._extract_solution(solver2, placements2) 
 
-            # objetivo ponderado: (hosts, chips, slack)
-            hostW, chipW, slackW = weights
-            cap = CHIP_CAPACITY
-            slack_terms = []
-            for h in range(H):
-                for c in range(CHIPS_PER_HOST):
-                    expr_used = sum(self.vms[i].size * x[i,h,c] for i in range(n))
-                    slack_terms.append(cap * v[h,c] - expr_used)
-            model.Minimize(
-                hostW * sum(u[h] for h in range(H)) +
-                chipW * sum(v[h,c] for h in range(H) for c in range(CHIPS_PER_HOST)) +
-                slackW * sum(slack_terms)
-            )
-            return model, x, u, v, y
+    # Reemplaza la función _build_model_final completa en tu solver_cpsat.py con esta:
 
-        # -- solve fase 1
-        w1 = (1_000_000, 0, 0)  # solo hosts
-        m1, x1, u1, v1, y1 = build_model(w1, None)
-        s = cp_model.CpSolver()
-        s.parameters.max_time_in_seconds = float(self.params.time_limit_s)
-        s.parameters.num_search_workers = 8
-        r1 = s.Solve(m1)
-        if r1 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            return [], {"status": "UNKNOWN", "hosts": 0, "total_used": 0, "total_capacity": 0,
-                        "utilization": 0.0, "empty_pct": 1.0, "per_az": {}}
-        best_hosts = int(sum(int(s.Value(u1[h])) for h in range(ub)))
+    def _build_model_final(self, model: cp_model.CpModel, num_hosts: int):
+        """Construye un modelo de Bin-Packing usando las restricciones nativas y más eficientes."""
+        num_vms = len(self.vms)
+        num_chips = num_hosts * CHIPS_PER_HOST
 
-        # ---------- FASE 2: fija hosts y minimiza chips y slack ----------
-        # pesos: primero chips, luego slack (ambos con hosts fijos)
-        w2 = (0, 10_000, 1)
-        m2, x2, u2, v2, y2 = build_model(w2, best_hosts)
-        s2 = cp_model.CpSolver()
-        s2.parameters.max_time_in_seconds = float(self.params.time_limit_s)
-        s2.parameters.num_search_workers = 8
-        r2 = s2.Solve(m2)
-        STATUS_MAP = {
-            cp_model.OPTIMAL: "OPTIMAL",
-            cp_model.FEASIBLE: "FEASIBLE",
-            cp_model.INFEASIBLE: "INFEASIBLE",
-            cp_model.MODEL_INVALID: "MODEL_INVALID",
-            cp_model.UNKNOWN: "UNKNOWN",
-        }
-        status_name = STATUS_MAP.get(r2, str(r2))
-        if r2 not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            # cae al resultado de fase 1 por si acaso
-            return self._extract_solution(s, r1, x1, u1, v1, y1, H)
+        # --- VARIABLES PRINCIPALES (MODELO DE "AGENDA") ---
+        starts = [model.NewIntVar(0, CHIP_CAPACITY, f'start_{i}') for i in range(num_vms)]
+        chips = [model.NewIntVar(0, num_chips - 1, f'chip_{i}') for i in range(num_vms)]
+        
+        # --- RESTRICCIÓN DE CAPACIDAD (BIN-PACKING) con AddNoOverlap ---
+        tasks_per_chip = [[] for _ in range(num_chips)]
+        
+        # <<< CORRECCIÓN: Se usa NewOptionalIntervalVar para crear los intervalos >>>
+        for i in range(num_vms):
+            for c in range(num_chips):
+                # b es la variable que indica si la VM i ESTÁ PRESENTE en el chip c.
+                b = model.NewBoolVar(f'presence_{i}_on_chip_{c}')
+                model.Add(chips[i] == c).OnlyEnforceIf(b)
+                model.Add(chips[i] != c).OnlyEnforceIf(b.Not())
+                
+                # Se crea un INTERVALO OPCIONAL. Este intervalo solo "existe" para el solver
+                # si su variable de presencia (b) es verdadera.
+                interval = model.NewOptionalIntervalVar(
+                    starts[i], self.vms[i].size, starts[i] + self.vms[i].size, b, f'interval_{i}_on_{c}'
+                )
+                tasks_per_chip[c].append(interval)
 
-        # extrae solución fase 2
-        return self._extract_solution(s2, r2, x2, u2, v2, y2, H)
-    
-    def _extract_solution(self, solver, status_code, x, u, v, y, H):
-        from ortools.sat.python import cp_model
-        STATUS_MAP = {
-            cp_model.OPTIMAL: "OPTIMAL",
-            cp_model.FEASIBLE: "FEASIBLE",
-            cp_model.INFEASIBLE: "INFEASIBLE",
-            cp_model.MODEL_INVALID: "MODEL_INVALID",
-            cp_model.UNKNOWN: "UNKNOWN",
-        }
-        status_name = STATUS_MAP.get(status_code, str(status_code))
-        used_hosts = [h for h in range(H) if solver.Value(u[h]) == 1]
-        host_id_map = {h: idx+1 for idx, h in enumerate(used_hosts)}
-        hosts_out = {}
-        for h in used_hosts:
-            az = "MIX"
-            if self.params.enforce_az_per_host:
-                for a in self.az_values:
-                    if (h, a) in y and solver.Value(y[h,a]) == 1:
-                        az = a; break
-            hosts_out[h] = HostResult(id=host_id_map[h], az=az, chips=[ChipResult(), ChipResult()])
+        for c in range(num_chips):
+            # AddNoOverlap ahora recibe una lista de intervalos opcionales.
+            # Automáticamente ignorará los que no estén presentes.
+            model.AddNoOverlap(tasks_per_chip[c])
 
-        # Asignaciones -> posiciones contiguas
+        # --- OTRAS RESTRICCIONES (AZ y ANTI-AFINIDAD) ---
+        host_of_vm = [model.NewIntVar(0, num_hosts - 1, f'host_of_vm_{i}') for i in range(num_vms)]
+        for i in range(num_vms):
+            model.AddDivisionEquality(host_of_vm[i], chips[i], CHIPS_PER_HOST)
+
+        # AZ: Si dos VMs tienen AZ diferente, no pueden estar en el mismo host.
+        if self.params.enforce_az_per_host:
+            for i in range(num_vms):
+                for j in range(i + 1, num_vms):
+                    if self.vms[i].az != self.vms[j].az:
+                        model.Add(host_of_vm[i] != host_of_vm[j])
+
+        # Anti-afinidad: A lo sumo 'limit' VMs del mismo tipo por host.
+        vms_by_type = {key: [] for key in self.vm_types}
         for i, vm in enumerate(self.vms):
-            placed = False
-            for h in used_hosts:
-                for c in range(CHIPS_PER_HOST):
-                    if solver.Value(x[i,h,c]) == 1:
-                        chip = hosts_out[h].chips[c]
-                        start = chip.used
-                        end = start + vm.size
-                        chip.items.append(Placement(vm=vm, host_id=hosts_out[h].id, chip_idx=c, start=start, end=end))
-                        chip.used += vm.size
-                        placed = True
-                        break
-                if placed: break
+            vms_by_type[vm.vm_type.key()].append(i)
+        
+        for type_key, vm_indices in vms_by_type.items():
+            if not vm_indices: continue
+            limit = self.vm_types[type_key]
+            if limit >= len(vm_indices): continue
+            
+            for h in range(num_hosts):
+                vms_on_host = [model.NewBoolVar(f'type_{type_key}_vm_{i}_on_host_{h}') for i in vm_indices]
+                for i, b_var in zip(vm_indices, vms_on_host):
+                    model.Add(host_of_vm[i] == h).OnlyEnforceIf(b_var)
+                    model.Add(host_of_vm[i] != h).OnlyEnforceIf(b_var.Not())
+                model.Add(sum(vms_on_host) <= limit)
 
-        hosts_list = list(hosts_out.values())
-        hosts_list.sort(key=lambda H: (H.az, H.id))
+        # --- OBJETIVO Y SIMETRÍA ---
+        hosts_used = [model.NewBoolVar(f"host_used_{h}") for h in range(num_hosts)]
+        for h in range(num_hosts):
+            is_any_vm_on_host = [model.NewBoolVar(f'any_vm_{i}_on_host_{h}') for i in range(num_vms)]
+            for i in range(num_vms):
+                model.Add(host_of_vm[i] == h).OnlyEnforceIf(is_any_vm_on_host[i])
+                model.Add(host_of_vm[i] != h).OnlyEnforceIf(is_any_vm_on_host[i].Not())
+            model.AddMaxEquality(hosts_used[h], is_any_vm_on_host)
 
-        # --- estadísticas ---
-        total_capacity = len(hosts_list) * HOST_CAPACITY
-        total_used = sum(h.used for h in hosts_list)
+            if h > 0:
+                model.Add(hosts_used[h] <= hosts_used[h-1])
+
+        return (chips, starts), hosts_used
+
+    def _extract_solution(self, solver: cp_model.CpSolver, placements: tuple) -> tuple[list, dict]:
+        """Extrae la solución del nuevo modelo y la formatea."""
+        chips_sol, starts_sol = placements
+        hosts_out: Dict[int, HostResult] = {}
+        
+        for vm_idx, vm in enumerate(self.vms):
+            chip_val = solver.Value(chips_sol[vm_idx])
+            start_val = solver.Value(starts_sol[vm_idx])
+            host_idx = chip_val // CHIPS_PER_HOST
+            chip_idx_local = chip_val % CHIPS_PER_HOST
+            
+            if host_idx not in hosts_out:
+                hosts_out[host_idx] = HostResult(id=0, az=vm.az, chips=[ChipResult(), ChipResult()])
+            
+            chip = hosts_out[host_idx].chips[chip_idx_local]
+            placement_obj = Placement(vm=vm, host_id=0, chip_idx=chip_idx_local, start=start_val, end=start_val + vm.size)
+            chip.items.append(placement_obj)
+            chip.used += vm.size
+
+        hosts_list = sorted(hosts_out.values(), key=lambda h: (h.az))
+        for host in hosts_list:
+            for chip in host.chips:
+                chip.items.sort(key=lambda p: p.start)
+        for i, host in enumerate(hosts_list):
+            host.id = i + 1
+            for chip in host.chips:
+                for p in chip.items:
+                    p.host_id = host.id
+
+        # --- CÁLCULO DE ESTADÍSTICAS ---
+        df = build_layout_dataframe(hosts_list)
+        used_hosts = int(df['HOST'].max()) if not df.empty else 0
+        total_capacity = used_hosts * HOST_CAPACITY
+        total_used = int(df.loc[df["VM"] != "INFRA", "Length"].sum())
         util = (total_used / total_capacity) if total_capacity else 0.0
-
-        # por AZ
+        
         per_az = {}
-        for h in hosts_list:
-            a = h.az
-            per_az.setdefault(a, {"hosts":0,"used":0,"capacity":0})
-            per_az[a]["hosts"] += 1
-            per_az[a]["used"] += h.used
-            per_az[a]["capacity"] += HOST_CAPACITY
+        if used_hosts > 0:
+            for az, df_zona in df.groupby(by='AZ'):
+                hosts_in_az = df_zona['Host'].max() if not df_zona.empty else 0
+                used_in_az = int(df_zona.loc[df_zona["VM"] != "INFRA", "Length"].sum())
+                capacity_in_az = int(hosts_in_az) * HOST_CAPACITY
+                per_az[az] = {"hosts": int(hosts_in_az), "used": used_in_az, "capacity": int(capacity_in_az), "utilization": (used_in_az / capacity_in_az) if capacity_in_az else 0.0}
 
-        # chips usados y distribución de huecos
-        chips_used = 0
-        holes_hist = {}  # tamaño_hueco -> cantidad (a nivel chip)
-        for h in hosts_list:
-            for ch in h.chips:
-                if ch.used > 0:
-                    chips_used += 1
-                slack = CHIP_CAPACITY - ch.used
+        chips_used, holes_hist = 0, {}
+        if used_hosts > 0:
+            for _, df_chip in df[df['VM'] != 'INFRA'].groupby(by=['Chip', 'HOST']):
+                ch_used = df_chip["Length"].sum()
+                slack = CHIP_CAPACITY - ch_used
                 holes_hist[slack] = holes_hist.get(slack, 0) + 1
+                chips_used += 1
 
-        # utilización por host (para diagnósticos)
-        host_utils = [h.used / HOST_CAPACITY for h in hosts_list] if hosts_list else []
-
+        host_utils = [df_host.loc[df_host["VM"] != "INFRA", "Length"].sum() / HOST_CAPACITY for _, df_host in df.groupby(by='HOST')] if used_hosts > 0 else []
+        
         stats = {
-            "status": status_name,
-            "hosts": len(hosts_list),
-            "total_used": total_used,
-            "total_capacity": total_capacity,
-            "utilization": util,
-            "empty_pct": 1 - util,
-            "chips_used": chips_used,
-            "holes_histogram": holes_hist,
+            "status": solver.StatusName(), "hosts": used_hosts, "total_used": total_used,
+            "total_capacity": total_capacity, "utilization": util, "empty_pct": 1 - util,
+            "chips_used": chips_used, "holes_histogram": {str(k): v for k, v in holes_hist.items()},
             "host_utilization": {
                 "avg": sum(host_utils)/len(host_utils) if host_utils else 0.0,
                 "max": max(host_utils) if host_utils else 0.0,
                 "min": min(host_utils) if host_utils else 0.0,
             },
-            "per_az": {a: {**v, "utilization": (v["used"]/v["capacity"]) if v["capacity"] else 0.0}
-                       for a, v in per_az.items()}
+            "per_az": per_az
         }
+        
         return hosts_list, stats

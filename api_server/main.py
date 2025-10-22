@@ -1,6 +1,9 @@
 import os, time, io, base64
 from pathlib import Path
 
+import cProfile
+import pstats
+
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -61,6 +64,10 @@ async def run_cpsat(
 
     params = SolverParams(enforce_az_per_host=True, time_limit_s=float(timeLimit))
 
+    # --- Medición de Tiempo de Ejecución ---
+    start_time = time.monotonic() # Inicia el cronómetro
+    profiler = cProfile.Profile()
+    profiler.enable()
     if algo == "idati":
         packer = IdatiPacker(vms, params)
         hosts, stats = packer.solve()
@@ -73,6 +80,17 @@ async def run_cpsat(
             hosts, stats= packer.solve_two_phase()
         else:
             hosts, stats = packer.solve()
+    profiler.disable()
+    end_time = time.monotonic() # Detiene el cronómetro
+    # --- Fin de la Medición -
+
+    # Imprime los resultados en la consola de VSC
+    stats_profiler = pstats.Stats(profiler).sort_stats('cumtime')
+    stats_profiler.print_stats(20) # Muestra las 20 funciones más lentas
+
+    # mostrar tiempo de ejecución en consola
+    elapsed_time = end_time - start_time
+    print(f"Tiempo de ejecución del solver ({algo}): {elapsed_time:.2f} segundos")
 
     stats["n_vms"] = len(vms)
     stats["az_values"] = sorted({vm.az for vm in vms})
