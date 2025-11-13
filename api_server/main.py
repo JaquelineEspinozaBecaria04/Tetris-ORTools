@@ -13,6 +13,7 @@ from .solver_cpsat import CpsatPacker, SolverParams
 from .solver_sa import SaPacker
 from .solver_idati import IdatiPacker
 from .plot_layout import render_layout_png as render_mpl_png
+from .excel_utils import generar_excel_visual_to
 try:
     from .plotly_layout import (
         render_layout_png_plotly as render_plotly_png,
@@ -100,11 +101,15 @@ async def run_cpsat(
             status_code=422,
             content={"error": f"No se encontró solución ({stats.get('status','UNKNOWN')}).", "stats": stats},
         )
+    
+    # sacar df del include table para que se genere siempre 
+    # para la función de generación de imagen en formato xlsx
+    df = build_layout_dataframe(hosts)
+
 
     table = None
     if includeTable:
         try:
-            df = build_layout_dataframe(hosts)
             fname = f"tetris_{int(time.time())}.csv"
             out_path = GENERATED_DIR / fname
             df.to_csv(out_path, index=False, encoding="utf-8-sig")
@@ -139,6 +144,15 @@ async def run_cpsat(
 
     if table:
         resp["table"] = table
+
+    #  Generar archivo excel
+    try:
+        excel_bytes = generar_excel_visual_to(df, site_name="Optimizado")
+        excel_b64 = base64.b64encode(excel_bytes).decode('utf-8')
+        resp["layout_excel"] = excel_b64
+    except Exception as e:
+        print(f"Error generando Excel Visual: {e}")
+ 
 
     return resp
 

@@ -5,7 +5,8 @@
 // - STOP con AbortController
 // - Muestra HTML interactivo (iframe) o PNG (fallback)
 // - Descarga CSV sólo si backend devolvió URL válida
-
+// - Descarga de la imagen generada en formato XLSX
+// - Renderización de estadísticas
 const $ = (s) => document.querySelector(s);
 
 // helper para leer valores de inputs/selector
@@ -33,6 +34,7 @@ const btnRun         = $("#btnRun");
 const btnStop        = $("#btnStop");
 const btnDownload    = $("#btnDownload");     // PNG
 const btnDownloadCSV = $("#btnDownloadCSV");  // CSV
+const btnDownloadXLS = $("#btnDownloadXLS");  // XLSX
 
 let currentRefitHandler = null;
 
@@ -51,6 +53,11 @@ function hideDownloads() {
     btnDownloadCSV.removeAttribute("href");
     btnDownloadCSV.removeAttribute("download");
     btnDownloadCSV.dataset.ready = "0";
+  }
+  if (btnDownloadXLS) {
+    btnDownloadXLS.style.display = "none";
+    btnDownloadXLS.removeAttribute("href");
+    btnDownloadXLS.removeAttribute("download");
   }
 }
 function showCsv(url, filename) {
@@ -179,6 +186,15 @@ btnRun.onclick = async () => {
       showCsv(null);
     }
 
+    if (btnDownloadXLS && data.layout_excel) {
+      const blob = b64toBlob(data.layout_excel, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const url = URL.createObjectURL(blob);
+      
+      btnDownloadXLS.href = url;
+      btnDownloadXLS.download = `tetris_visual_${Date.now()}.xlsx`;
+      btnDownloadXLS.style.display = "inline-block";
+    }
+
     renderStats(data.stats || {});
   } catch (err) {
     layoutEl.innerHTML = (err?.name === "AbortError")
@@ -222,4 +238,20 @@ function renderStats(s) {
         <div>hosts: ${safe(v.hosts)}<br>utilidad: ${fmtPct(v.utilization)}</div></div>`;
     }
   }
+}
+
+// --- Función para generar imagen en base 64 para el excel ---
+function b64toBlob(b64Data, contentType='', sliceSize=512) {
+  const byteCharacters = atob(b64Data);
+  const byteArrays = [];
+  for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+    const slice = byteCharacters.slice(offset, offset + sliceSize);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+  return new Blob(byteArrays, {type: contentType});
 }
