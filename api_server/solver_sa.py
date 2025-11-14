@@ -231,10 +231,9 @@ def recocido_simulado(vmf, cores, az, numero_hosts_por_az, max_piezas_map, param
     iteracion = 0
 
     while T > T_final and iteracion < max_iter:
-        # LÓGICA DE BÚSQUEDA RESTAURADA: usa generar_vecino
         vecino, servidor_vecino, _ = generar_vecino(solucion_actual, servidor_actual, T_inicial, T, vmf, cores)
         
-        # Recalcular hosts usados para el vecino (simplificado)
+        # Recalcular hosts usados para el vecino 
         hosts_usados_vecino = [len(zona) for zona in servidor_vecino]
         costo_vecino = evaluar_solucion(servidor_vecino, hosts_usados_vecino, max_piezas_map)
         
@@ -322,23 +321,57 @@ class SaPacker:
                     placement.host_id = host.id
 
         # --- Estandarización de Estadísticas ---
-        total_capacity = len(hosts_list) * HOST_CAPACITY
-        total_used = sum(h.used for h in hosts_list)
+        used_hosts = len(hosts_list)
+        total_capacity = used_hosts* HOST_CAPACITY
+        total_used = int(sum(h.used for h in hosts_list))
         util = (total_used / total_capacity) if total_capacity else 0.0
 
         per_az = {}
-        for h in hosts_list:
-            a = h.az
-            per_az.setdefault(a, {"hosts":0,"used":0,"capacity":0})
-            per_az[a]["hosts"] += 1
-            per_az[a]["used"] += h.used
-            per_az[a]["capacity"] += HOST_CAPACITY
+        if used_hosts > 0:
+            az_host_map = {} # Temporal para agrupar hosts por AZ
+            for h in hosts_list:
+                az_host_map.setdefault(h.az, []).append(h)
+            
+            for az_name, hosts_in_az_list in az_host_map.items():
+                hosts_in_az = len(hosts_in_az_list)
+                used_in_az = int(sum(h.used for h in hosts_in_az_list)) 
+                capacity_in_az = int(hosts_in_az * HOST_CAPACITY)
+                per_az[az_name] = {
+                    "hosts": int(hosts_in_az), 
+                    "used": used_in_az,
+                    "capacity": capacity_in_az,
+                    "utilization": (used_in_az / capacity_in_az) if capacity_in_az else 0.0
+                }
+        
+        chips_used = 0
+        holes_hist = {}
+        if used_hosts > 0:
+            for host in hosts_list:
+                for chip in host.chips:
+                    if chip.used > 0: # Chip tiene al menos una VM
+                        chips_used += 1
+                        # slack es capacidad (int) - usado (int)
+                        # Usamos round() por si 'chip.used' es float
+                        slack = CHIP_CAPACITY - int(round(chip.used)) 
+                        holes_hist[slack] = holes_hist.get(slack, 0) + 1
+
+        host_utils = [host.used / HOST_CAPACITY for host in hosts_list] if used_hosts > 0 else []
         
         stats = {
-            "status": "FEASIBLE", "hosts": len(hosts_list),
-            "total_used": total_used, "total_capacity": total_capacity,
-            "utilization": util, "empty_pct": 1 - util,
-            "per_az": {a: {**v, "utilization": (v["used"]/v["capacity"]) if v["capacity"] else 0.0} for a, v in per_az.items()}
+            "status": "FEASIBLE", 
+            "hosts": used_hosts,
+            "total_used": total_used,
+            "total_capacity": total_capacity,
+            "utilization": util,
+            "empty_pct": 1 - util,
+            "chips_used": chips_used,
+            "holes_histogram": {str(k): v for k, v in holes_hist.items()}, # Convertir keys a str
+            "host_utilization": {
+                "avg": sum(host_utils) / len(host_utils) if host_utils else 0.0,
+                "max": max(host_utils) if host_utils else 0.0,
+                "min": min(host_utils) if host_utils else 0.0,
+            },
+            "per_az": per_az
         }
         
         return hosts_list, stats
